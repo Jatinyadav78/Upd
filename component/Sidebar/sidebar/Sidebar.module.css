@@ -1,0 +1,68 @@
+.sidebar {
+  width: 60px;
+  height: 100vh;
+  background: #1b5cb8;
+  color: white;
+  transition: all 0.3s ease;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 100;
+  overflow-x: hidden;
+}
+
+/* Expand sidebar when user clicks toggle (not hovered) */
+.sidebar:hover,
+.sidebar:not(.collapsed) {
+  width: 250px;
+}
+
+.toggleButton {
+  padding: 10px;
+  display: flex;
+  justify-content: flex-end;
+  color: white;
+}
+
+.menuItems {
+  padding: 20px 0;
+}
+
+.menuItem {
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.menuItem:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.icon {
+  min-width: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title {
+  margin-left: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* Show titles on hover or when expanded manually */
+.sidebar:hover .title,
+.sidebar:not(.collapsed) .title {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.active {
+  background-color: #e6f0ff;
+  font-weight: bold;
+}
