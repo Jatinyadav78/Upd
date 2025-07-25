@@ -217,7 +217,7 @@ const FirDashboard = () => {
           }
         },
         labels: Object.keys(causeData),
-        colors: ['#4361ee', '#3f8cff', '#6c8cff', '#95a8ff', '#b8c3ff'],
+        colors: ['#4361ee', '#0c7fddff', '#285ad7ff', '#95a8ff', '#b8c3ff'],
         legend: {
           position: 'bottom',
           fontSize: '14px',
@@ -316,13 +316,31 @@ const FirDashboard = () => {
             }
           }
         },
-        colors: ['#48cae4'],
+        // Use a different color for each bar
+        colors: Object.keys(experienceData).map((_, idx) => {
+          const palette = [
+            '#48cae4', // blue
+            '#ffb703', // yellow
+            '#fb8500', // orange
+            '#219ebc', // teal
+            '#8ecae6', // light blue
+            '#ff006e', // pink
+            '#8338ec', // purple
+            '#3a86ff', // deep blue
+            '#06d6a0', // green
+            '#ffd166', // light yellow
+            '#ef476f', // red
+            '#118ab2', // blue-green
+            '#073b4c'  // dark blue
+          ];
+          return palette[idx % palette.length];
+        }),
         plotOptions: {
           bar: {
             borderRadius: 8,
             columnWidth: '60%',
             horizontal: false,
-            distributed: true
+            distributed: true // This enables per-bar coloring
           }
         },
         dataLabels: {
@@ -613,10 +631,10 @@ const FirDashboard = () => {
       ) : (
         <>
           {/* Responsive Grid for All Cards */}
-          <Grid container spacing={3} sx={{ width: '100%', maxWidth: 1200, mx: 'auto', mt: 2, mb: 1, justifyContent: 'center' }}>
+          <Grid container spacing={3} sx={{ width: '100%', maxWidth: 1400, mx: 'auto', mt: 2, mb: 1, justifyContent: 'center' }}>
             {/* Incident Categories Graph Card (Full Width) */}
             <Grid item xs={12}>
-              <Card sx={{ borderRadius: 3, boxShadow: 3, background: '#fff', height: { xs: 350, md: 420 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+              <Card sx={{ borderRadius: 3, boxShadow: 3, background: '#fff', height: 420, display: 'flex', flexDirection: 'column', justifyContent: 'center', width: '100%', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
                 <CardContent sx={{ height: '100%', position: 'relative', pb: 2 }}>
                   {/* Total Incidents Button at top right */}
                   <Button
@@ -632,7 +650,7 @@ const FirDashboard = () => {
                       borderRadius: '24px',
                       boxShadow: '0 2px 8px rgba(50, 198, 203, 0.1)',
                       zIndex: 2,
-                      px: 2.5,
+                      px: 1.5,
                       py: 1.2,
                       minWidth: 0,
                       minHeight: 0,
@@ -654,7 +672,7 @@ const FirDashboard = () => {
                   <Typography variant="h6" sx={{ color: '#232946', fontWeight: 600, mb: 2, textAlign: 'left', letterSpacing: 0.5, mt: 1, fontSize: { xs: '1.1rem', md: '1.25rem' } }}>
                     Incident Categories
                   </Typography>
-                  <Box sx={{ width: '100%', height: { xs: 200, md: 320 }, mt: 2 }}>
+                  <Box sx={{ width: '100%', height: 320, mt: 2 }}>
                     <Chart
                       options={{
                         ...chartConfigs.incidentCategoryOptions,
@@ -694,69 +712,69 @@ const FirDashboard = () => {
                         data: chartCategoryData
                       }]}
                       type="line"
-                      height={window.innerWidth < 600 ? 200 : 320}
+                      height={320}
                     />
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
             {/* Other Cards Responsive */}
-            <Grid item xs={12} md={6}>
-              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: { xs: 300, md: 400 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 }, height: '100%' }}>
+            <Grid item xs={12} sm={6} lg={4}>
+              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+                <CardContent sx={{ p: 3, height: '100%' }}>
                   <Chart
                     options={chartConfigs.cause.options}
                     series={chartConfigs.cause.series}
                     type="pie"
-                    height={window.innerWidth < 600 ? 180 : 300}
+                    height={300}
                   />
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: { xs: 300, md: 400 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 }, height: '100%' }}>
+            <Grid item xs={12} sm={6} lg={4}>
+              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+                <CardContent sx={{ p: 3, height: '100%' }}>
                   <Chart
                     options={chartConfigs.treatment.options}
                     series={chartConfigs.treatment.series}
                     type="donut"
-                    height={window.innerWidth < 600 ? 180 : 300}
+                    height={300}
                   />
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: { xs: 300, md: 400 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 }, height: '100%' }}>
+            <Grid item xs={12} sm={6} lg={4}>
+              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+                <CardContent sx={{ p: 3, height: '100%' }}>
                   <Chart
                     options={chartConfigs.ppe.options}
                     series={chartConfigs.ppe.series}
                     type="pie"
-                    height={window.innerWidth < 600 ? 180 : 300}
+                    height={300}
                   />
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: { xs: 300, md: 400 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 }, height: '100%' }}>
+            <Grid item xs={12} sm={6} lg={6}>
+              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+                <CardContent sx={{ p: 3, height: '100%' }}>
                   <Chart
                     options={chartConfigs.experience.options}
                     series={chartConfigs.experience.series}
                     type="bar"
-                    height={window.innerWidth < 600 ? 180 : 300}
+                    height={300}
                   />
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
-              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: { xs: 300, md: 400 }, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 }, height: '100%' }}>
+            <Grid item xs={12} sm={6} lg={6}>
+              <Card sx={{ backgroundColor: '#ffffff', borderRadius: 3, boxShadow: 3, height: 400, display: 'flex', flexDirection: 'column', justifyContent: 'center', transition: 'box-shadow 0.2s', '&:hover': { boxShadow: 6 } }}>
+                <CardContent sx={{ p: 3, height: '100%' }}>
                   <Chart
                     options={chartConfigs.ipStatus.options}
                     series={chartConfigs.ipStatus.series}
                     type="donut"
-                    height={window.innerWidth < 600 ? 180 : 300}
+                    height={300}
                   />
                 </CardContent>
               </Card>
@@ -770,6 +788,7 @@ const FirDashboard = () => {
 };
 
 export default FirDashboard; 
+
 
 
 

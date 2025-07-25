@@ -865,8 +865,11 @@ const SafetyDashboard = () => {
               </Box>
             </Popover>
             <Button
+            
+                    
               variant='contained'
               style={{ backgroundColor: '#0073FF' }}
+              
               startIcon={<AddIcon />}
               onClick={handleSafetyForm}
             >
@@ -1099,8 +1102,6 @@ const SafetyDashboard = () => {
 };
 
 export default SafetyDashboard;
-
-
 
 
 

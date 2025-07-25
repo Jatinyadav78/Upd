@@ -61,8 +61,8 @@ const Sidebar = () => {
     >
      <div className={Styles.toggleButton}>
   {/* ✅ Safety Dashboard label on the left */}
-  <span style={{ color: 'white', marginRight: '8px', fontWeight: 600 }}>
-   
+  <span className={Styles.safetyDashboardHeading}>
+    Safety Dashboard
   </span>
 
   {/* Menu Icon on the right */}

@@ -66,3 +66,14 @@
   background-color: #e6f0ff;
   font-weight: bold;
 }
+
+.safetyDashboardHeading {
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+  white-space: nowrap;
+  height: 40px;
+}
