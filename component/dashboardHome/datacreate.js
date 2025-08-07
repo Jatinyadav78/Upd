@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getLocalStorage } from '../../helperFunction/localStorage';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import Collapse from '@mui/material/Collapse';
 
 import { api } from '../../utils';
 
@@ -89,13 +92,7 @@ const DataCreate = () => {
     organizationId: getSelectedOrganizationId(),
     departmentId: departmentId || '',
     approvers: [],
-    escalationAlert: [{
-      level: 1,
-      emails: [],
-      timeout: 24, // hours
-      reminderInterval: 12, // hours
-      maxReminders: 3
-    }],
+    escalationAlert: [],
     isActive: true
   });
 
@@ -985,13 +982,7 @@ const DataCreate = () => {
         organizationId: orgId,
         departmentId: departmentId || '',
         approvers: [],
-        escalationAlert: [{
-          level: 1,
-          emails: [],
-          timeout: 24, // hours
-          reminderInterval: 12, // hours
-          maxReminders: 3
-        }],
+        escalationAlert: [],
         isActive: true
       });
       setEditingWorkflow(null);
@@ -1440,138 +1431,240 @@ const DataCreate = () => {
                   });
                 }}
               >
-                + Add New Item
+                 Add New Item
               </Button>
             </Grid>
 
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>Escalation Alert</Typography>
-              {workflowForm.escalationAlert.map((alert, index) => (
-                <Card key={index} variant="outlined" sx={{ p: 2, mb: 2 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="subtitle1">
-                      <strong>Escalation Alert [{alert.level}]</strong>
-                    </Typography>
-                    <Button
-                      variant="outlined"
-                      color="error"
-                      size="small"
-                      startIcon={<DeleteIcon />}
-                      onClick={() => {
-                        const newAlerts = workflowForm.escalationAlert.filter((_, i) => i !== index);
-                        setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
-                      }}
-                      disabled={workflowForm.escalationAlert.length <= 1}
-                    >
-                      Remove Alert Level
-                    </Button>
-                  </Box>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Emails</Typography>
-                      <TextField
-                        fullWidth
-                        value={alert.emails?.join(', ') || ''}
-                        onChange={(e) => {
-                          const newAlerts = [...workflowForm.escalationAlert];
-                          newAlerts[index].emails = e.target.value.split(',').map(email => email.trim()).filter(Boolean);
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  const newAlerts = [...workflowForm.escalationAlert];
+                  newAlerts.push({
+                    level: '',
+                    emails: [''],
+                    timeout: '',
+                    reminderInterval: '',
+                    maxReminders: ''
+                  });
+                  setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                }}
+                size="small"
+                sx={{ 
+                  mb: 2,
+                  borderColor: '#1976d2',
+                  color: '#1976d2',
+                  '&:hover': {
+                    borderColor: '#1565c0',
+                    backgroundColor: '#e3f2fd'
+                  }
+                }}
+              >
+                Add New Item
+              </Button>
+                
+                {workflowForm.escalationAlert.map((alert, index) => (
+                  <Card key={index} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="subtitle1">[{index + 1}]</Typography>
+                      <IconButton 
+                        color="error" 
+                        onClick={() => {
+                          const newAlerts = workflowForm.escalationAlert.filter((_, i) => i !== index);
                           setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
                         }}
-                        placeholder="email1@example.com, email2@example.com"
-                        helperText="Enter comma-separated email addresses"
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Grid>
+                        disabled={workflowForm.escalationAlert.length <= 1}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Box>
                     
-                    <Grid item xs={12} md={4}>
-                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Timeout (hours)</Typography>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        value={alert.timeout || 24}
-                        onChange={(e) => {
-                          const newAlerts = [...workflowForm.escalationAlert];
-                          newAlerts[index].timeout = parseInt(e.target.value) || 0;
-                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
-                        }}
-                        inputProps={{ min: 1 }}
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={4}>
-                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Reminder Interval (hours)</Typography>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        value={alert.reminderInterval || 12}
-                        onChange={(e) => {
-                          const newAlerts = [...workflowForm.escalationAlert];
-                          newAlerts[index].reminderInterval = parseInt(e.target.value) || 0;
-                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
-                        }}
-                        inputProps={{ min: 1 }}
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Grid>
-                    
-                    <Grid item xs={12} md={4}>
-                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Max Reminders</Typography>
-                      <TextField
-                        fullWidth
-                        type="number"
-                        value={alert.maxReminders || 3}
-                        onChange={(e) => {
-                          const newAlerts = [...workflowForm.escalationAlert];
-                          newAlerts[index].maxReminders = parseInt(e.target.value) || 0;
-                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
-                        }}
-                        inputProps={{ min: 1 }}
-                        variant="outlined"
-                        size="small"
-                      />
-                    </Grid>
-                  </Grid>
-                </Card>
-              ))}
-              <Grid item xs={12}>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    const newAlerts = [...workflowForm.escalationAlert];
-                    newAlerts.push({
-                      level: newAlerts.length + 1,
-                      emails: [],
-                      timeout: 24,
-                      reminderInterval: 12,
-                      maxReminders: 3
-                    });
-                    setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
-                  }}
-                  sx={{ mt: 2 }}
-                >
-                  Add New Escalation Level
-                </Button>
-              </Grid>
+
+                      <Grid container spacing={2} sx={{ mt: 1 }}>
+                        <Grid item xs={12}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                            * Escalation Alert Level
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            value={alert.level || ''}
+                            placeholder="Enter level"
+                            onChange={(e) => {
+                              const newAlerts = [...workflowForm.escalationAlert];
+                              newAlerts[index].level = e.target.value ? parseInt(e.target.value) : '';
+                              setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                            }}
+                            inputProps={{ min: 1 }}
+                            variant="outlined"
+                            size="small"
+                            sx={{ backgroundColor: '#fff' }}
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                            * Escalation Alert Emails
+                          </Typography>
+                          <Box 
+                            sx={{ 
+                              border: '1px solid #e0e0e0', 
+                              borderRadius: '4px', 
+                              p: 2, 
+                              backgroundColor: '#f8f9fa',
+                              borderLeft: '3px solid #42a5f5'
+                            }}
+                          >
+                            {alert.emails?.map((email, emailIndex) => (
+                              <Box key={emailIndex} display="flex" alignItems="center" mb={1}>
+                                <TextField
+                                  fullWidth
+                                  value={email}
+                                  onChange={(e) => {
+                                    const newAlerts = [...workflowForm.escalationAlert];
+                                    newAlerts[index].emails[emailIndex] = e.target.value;
+                                    setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                                  }}
+                                  placeholder="email@example.com"
+                                  variant="outlined"
+                                  size="small"
+                                  sx={{ 
+                                    backgroundColor: '#fff',
+                                    '& .MuiOutlinedInput-root': {
+                                      '& fieldset': {
+                                        borderColor: '#e0e0e0',
+                                      },
+                                      '&:hover fieldset': {
+                                        borderColor: '#90caf9',
+                                      },
+                                    },
+                                  }}
+                                />
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => {
+                                    const newAlerts = [...workflowForm.escalationAlert];
+                                    newAlerts[index].emails.splice(emailIndex, 1);
+                                    setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                                  }}
+                                  sx={{ ml: 1, color: '#f44336' }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            ))}
+                            <Button
+                              variant="outlined"
+                              startIcon={<AddIcon />}
+                              onClick={() => {
+                                const newAlerts = [...workflowForm.escalationAlert];
+                                if (!newAlerts[index].emails) {
+                                  newAlerts[index].emails = [];
+                                }
+                                newAlerts[index].emails.push('');
+                                setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                              }}
+                              size="small"
+                              sx={{ 
+                                mt: 1,
+                                borderColor: '#42a5f5',
+                                color: '#42a5f5',
+                                fontSize: '0.75rem',
+                                '&:hover': {
+                                  borderColor: '#1e88e5',
+                                  backgroundColor: '#e3f2fd'
+                                }
+                              }}
+                            >
+                              + Add Email
+                            </Button>
+                          </Box>
+                        </Grid>
+                        
+                        <Grid item xs={12} md={4}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                            * Escalation Alert Timeout
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            value={alert.timeout || ''}
+                            placeholder="Enter timeout in hours"
+                            onChange={(e) => {
+                              const newAlerts = [...workflowForm.escalationAlert];
+                              newAlerts[index].timeout = e.target.value ? parseInt(e.target.value) : '';
+                              setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                            }}
+                            inputProps={{ min: 1 }}
+                            variant="outlined"
+                            size="small"
+                            sx={{ backgroundColor: '#fff' }}
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={4}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                            * Escalation Alert Reminder Interval
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            value={alert.reminderInterval || ''}
+                            placeholder="Enter interval in hours"
+                            onChange={(e) => {
+                              const newAlerts = [...workflowForm.escalationAlert];
+                              newAlerts[index].reminderInterval = parseInt(e.target.value) || 0;
+                              setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                            }}
+                            inputProps={{ min: 1 }}
+                            variant="outlined"
+                            size="small"
+                            sx={{ backgroundColor: '#fff' }}
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={4}>
+                          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                            * Escalation Alert Max Reminders
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            value={alert.maxReminders || ''}
+                            placeholder="Enter max reminders"
+                            onChange={(e) => {
+                              const newAlerts = [...workflowForm.escalationAlert];
+                              newAlerts[index].maxReminders = parseInt(e.target.value) || 0;
+                              setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                            }}
+                            inputProps={{ min: 1 }}
+                            variant="outlined"
+                            size="small"
+                            sx={{ backgroundColor: '#fff' }}
+                          />
+                        </Grid>
+                      </Grid>
+                  </Card>
+                ))}
             </Grid>
 
-            <Grid item xs={12}>
-              <Typography variant="h6" gutterBottom>Status</Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={workflowForm.isActive}
-                    onChange={(e) => setWorkflowForm({ ...workflowForm, isActive: e.target.checked })}
-                  />
-                }
-                label="Is Active"
-              />
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>Status</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={workflowForm.isActive}
+                      onChange={(e) => setWorkflowForm({ ...workflowForm, isActive: e.target.checked })}
+                    />
+                  }
+                  label="Is Active"
+                />
+              </Grid>
             </Grid>
             <Grid item xs={6}>
               <TextField
