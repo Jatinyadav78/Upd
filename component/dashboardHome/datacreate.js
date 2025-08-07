@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getLocalStorage } from '../../helperFunction/localStorage';
@@ -6,24 +6,15 @@ import { getLocalStorage } from '../../helperFunction/localStorage';
 import { api } from '../../utils';
 
 // API base URLs constants
-const GET_API_BASE_URL = `${api}v1`;
-const API_BASE_URL = `${api}v1`;
+const API_BASE_URL = `${api}v1/departments`;
+const WORKFLOW_API_URL = `${api}v1/workflows`;
 
 import {
   Button,
-  Card,
-  CardContent,
   Typography,
   TextField,
   Grid,
   Box,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -33,38 +24,41 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Chip,
   Switch,
   FormControlLabel,
-  Divider,
   Snackbar,
   Alert
 } from '@mui/material';
+import { Card } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Save as SaveIcon,
-  Cancel as CancelIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  Delete as DeleteIcon
 } from '@mui/icons-material';
 import Loader from '../ui/loader/loader.js';
+import DataTable, { MappingTables } from '../Table/table.js';
 import Styles from './datacreate.module.css';
 
 const DataCreate = () => {
+  console.log("saddasd")
   const router = useRouter();
   const searchParams = useSearchParams();
   const type = searchParams.get('type');
+  const departmentId = searchParams.get('id'); // Store department ID from URL parameter
 
   // Loading states
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
 
   // State for different sections
   const [departments, setDepartments] = useState([]);
   const [workflows, setWorkflows] = useState([]);
   const [mappings, setMappings] = useState([]);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(departmentId || null); // Store selected department ID
   
   // Dialog states
   const [departmentDialog, setDepartmentDialog] = useState(false);
@@ -72,80 +66,255 @@ const DataCreate = () => {
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [editingWorkflow, setEditingWorkflow] = useState(null);
 
-  // Notification state
-  const [notification, setNotification] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
-  });
+  // Get selected organization ID from localStorage
+  const getSelectedOrganizationId = () => {
+    const selectedOrgId = getLocalStorage('selectedOrgId');
+    if (!selectedOrgId) {
+      console.error('No organization selected');
+      return null;
+    }
+    return selectedOrgId;
+  };
 
-  // Form states
-  const [departmentForm, setDepartmentForm] = useState({
+  // Initialize form states with a function to avoid initialization order issues
+  const getInitialDepartmentForm = () => ({
     name: '',
     code: '',
-    organizationId: '',
+    organizationId: getSelectedOrganizationId()
   });
 
-  const [workflowForm, setWorkflowForm] = useState({
+  const getInitialWorkflowForm = () => ({
     name: '',
     description: '',
-    organizationId: '',
-    departmentId: '',
+    organizationId: getSelectedOrganizationId(),
+    departmentId: departmentId || '',
     approvers: [],
-    escalationAlert: false,
+    escalationAlert: [{
+      level: 1,
+      emails: [],
+      timeout: 24, // hours
+      reminderInterval: 12, // hours
+      maxReminders: 3
+    }],
     isActive: true
   });
 
-  // Mock data for organizations (for dropdown)
-  const mockOrganizations = [
-    { id: '66007bc3c0171669e42e4546', name: 'Organization 1' },
-    { id: 'ORG001', name: 'Organization 2' },
-    { id: 'ORG002', name: 'Organization 3' }
-  ];
+  // Form states
+  const [departmentForm, setDepartmentForm] = useState(getInitialDepartmentForm());
+  const [workflowForm, setWorkflowForm] = useState(getInitialWorkflowForm());
 
-  // Mock data for departments (for dropdown)
-  const mockDepartmentOptions = [
-    { id: 'HR', name: 'HR' },
-    { id: 'IT', name: 'IT' },
-    { id: 'Finance', name: 'Finance' },
-    { id: 'Operations', name: 'Operations' }
-  ];
+  // State to store cached organization names
+  const [organizations, setOrganizations] = useState({});
+  const [organizationLoading, setOrganizationLoading] = useState({});
 
-  // Mock data for users (for approvers dropdown)
-  const mockUsers = [
-    { id: 'Naman Agarwal', name: 'Naman Agarwal', email: 'naman.agarwal@jbmgroup.com' },
-    { id: 'John Doe', name: 'John Doe', email: 'john.doe@jbmgroup.com' },
-    { id: 'Jane Smith', name: 'Jane Smith', email: 'jane.smith@jbmgroup.com' },
-    { id: 'Mike Johnson', name: 'Mike Johnson', email: 'mike.johnson@jbmgroup.com' }
-  ];
-
-  // Function to get organization name by ID
+  // Function to get organization name by ID (synchronous)
   const getOrganizationName = (orgId) => {
-    const org = mockOrganizations.find(org => org.id === orgId);
-    return org ? org.name : orgId;
+    console.log("getOrganization",orgId,organizations)
+    if (!orgId) return 'N/A';
+    
+    // Return cached organization name if available
+    if (organizations[orgId]) {
+      return organizations[orgId];
+    }
+
+    // Return loading state if currently fetching
+    if (organizationLoading[orgId]) {
+      return 'Loading...';
+    }
+
+    // Return the ID as fallback if not cached yet
+    return orgId;
+  };
+
+  // Function to get department name by ID (synchronous)
+  const getDepartmentName = (deptId) => {
+    if (!deptId) return 'N/A';
+    
+    // Find department by ID in the departments array
+    const department = departments.find(dept => dept._id === deptId);
+    return department ? department.name : deptId;
+  };
+
+  // Function to fetch organization data
+  const fetchOrganizationName = async (orgId) => {
+    if (!orgId || organizations[orgId] || organizationLoading[orgId]) {
+      return;
+    }
+
+    setOrganizationLoading(prev => ({ ...prev, [orgId]: true }));
+
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(`${api}v1/work-permit/organizations/${orgId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch organization');
+      }
+
+      const data = await response.json();
+      console.log("fetcjorganixation",data)
+      // Cache the organization name
+      setOrganizations(prev => ({ ...prev, [orgId]: data.name }));
+      
+    } catch (error) {
+      console.error('Error fetching organization:', error);
+      // Set fallback to orgId in case of error
+      setOrganizations(prev => ({ ...prev, [orgId]: orgId }));
+    } finally {
+      // Clear loading state
+      setOrganizationLoading(prev => ({ ...prev, [orgId]: false }));
+    }
+  };
+
+  // Fetch users for approvers dropdown
+  const fetchUsers = async (orgId) => {
+    if (!orgId) {
+      console.error('No organization ID provided for fetching users');
+      return;
+    }
+    
+    try {
+      setLoadingUsers(true);
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${api}v1/organizations/${orgId}/users`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch users');
+      }
+      
+      const data = await response.json();
+      // Transform user data to match expected format
+      const formattedUsers = Array.isArray(data) ? data.map(user => ({
+        _id: user._id,
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || ''
+      })) : [];
+      
+      setUsers(formattedUsers);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to fetch users',
+        severity: 'error'
+      });
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  //  sync with navbar organization selection
+  useEffect(() => {
+    const selectedOrgId = getSelectedOrganizationId();
+    
+    if (selectedOrgId) {
+      setDepartmentForm(prev => ({
+        ...prev,
+        organizationId: selectedOrgId
+      }));
+      
+      setWorkflowForm(prev => ({
+        ...prev,
+        organizationId: selectedOrgId
+      }));
+      
+      // Fetch data for the selected organization
+      fetchDepartments(selectedOrgId);
+      fetchWorkflows(selectedOrgId);
+      fetchUsers(selectedOrgId);
+    } else {
+      console.warn('No organization selected');
+      setNotification({
+        open: true,
+        message: 'Please select an organization first',
+        severity: 'warning'
+      });
+    }
+  }, [getSelectedOrganizationId()]); 
+
+  // Effect to fetch organization names when departments or workflows change
+  useEffect(() => {
+    const orgIds = new Set();
+    
+    // Collect organization IDs from departments
+    departments.forEach(dept => {
+      if (dept.organizationId) {
+        orgIds.add(dept.organizationId);
+      }
+    });
+    
+    // Collect organization IDs from workflows
+    workflows?.forEach(wf => {
+      if (wf?.organizationId) {
+        orgIds.add(wf.organizationId);
+      }
+    });
+    
+    // Fetch organization names for all unique IDs
+    orgIds.forEach(orgId => {
+      fetchOrganizationName(orgId);
+    });
+  }, [departments, workflows]);
+
+  // Function to handle API error
+  const handleApiError = async (response) => {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Operation failed');
   };
 
   // API Functions
   const fetchDepartments = async (orgId = null) => {
     try {
       setDataLoading(true);
-      // Get the organization ID from the parameter, form, or default to the first mock organization
-      const organizationId = orgId || departmentForm.organizationId || mockOrganizations[0].id;
-      const response = await fetch(`${GET_API_BASE_URL}/departments/?organizationId=${organizationId}`, {
-        headers: {
-          'Authorization': getLocalStorage('token')
+      const organizationId = orgId || getSelectedOrganizationId();
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Updated URL 
+      const response = await fetch(`${api}v1/departments/?organizationId=${organizationId}`, {
+        headers:
+         {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+      
       if (!response.ok) {
         throw new Error('Failed to fetch departments');
       }
+      
       const data = await response.json();
       setDepartments(data);
     } catch (error) {
       console.error('Error fetching departments:', error);
       setNotification({
         open: true,
-        message: 'Failed to fetch departments',
+        message: error.message,
         severity: 'error'
       });
     } finally {
@@ -156,17 +325,25 @@ const DataCreate = () => {
   const createDepartment = async (departmentData) => {
     try {
       setSubmitting(true);
-      const response = await fetch(`${API_BASE_URL}/departments/`, {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': getLocalStorage('token')
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(departmentData),
       });
+      
       if (!response.ok) {
         throw new Error('Failed to create department');
       }
+      
       const data = await response.json();
       setDepartments([...departments, data]);
       setNotification({
@@ -179,7 +356,7 @@ const DataCreate = () => {
       console.error('Error creating department:', error);
       setNotification({
         open: true,
-        message: 'Failed to create department',
+        message: error.message,
         severity: 'error'
       });
       throw error;
@@ -191,17 +368,25 @@ const DataCreate = () => {
   const updateDepartment = async (id, departmentData) => {
     try {
       setSubmitting(true);
-      const response = await fetch(`${API_BASE_URL}/departments/${id}`, {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': getLocalStorage('token')
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(departmentData),
       });
+      
       if (!response.ok) {
         throw new Error('Failed to update department');
       }
+      
       const data = await response.json();
       setDepartments(departments.map(dept => dept._id === id ? data : dept));
       setNotification({
@@ -214,7 +399,7 @@ const DataCreate = () => {
       console.error('Error updating department:', error);
       setNotification({
         open: true,
-        message: 'Failed to update department',
+        message: error.message,
         severity: 'error'
       });
       throw error;
@@ -226,15 +411,24 @@ const DataCreate = () => {
   const deleteDepartment = async (id) => {
     try {
       setSubmitting(true);
-      const response = await fetch(`${API_BASE_URL}/departments/${id}`, {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': getLocalStorage('token')
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+      
       if (!response.ok) {
         throw new Error('Failed to delete department');
       }
+      
       setDepartments(departments.filter(dept => dept._id !== id));
       setNotification({
         open: true,
@@ -245,7 +439,7 @@ const DataCreate = () => {
       console.error('Error deleting department:', error);
       setNotification({
         open: true,
-        message: 'Failed to delete department',
+        message: error.message,
         severity: 'error'
       });
     } finally {
@@ -257,21 +451,32 @@ const DataCreate = () => {
   const getDepartmentById = async (id) => {
     try {
       setDataLoading(true);
-      const response = await fetch(`${GET_API_BASE_URL}/departments/${id}`, {
-        headers: {
-          'Authorization': getLocalStorage('token')
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      // Updated URL
+      const response = await fetch(`${api}v1/departments/${id}`, {
+        headers:
+         {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+      
       if (!response.ok) {
         throw new Error('Failed to fetch department');
       }
+      
       const data = await response.json();
       return data;
     } catch (error) {
       console.error('Error fetching department:', error);
       setNotification({
         open: true,
-        message: 'Failed to fetch department',
+        message: error.message,
         severity: 'error'
       });
       return null;
@@ -280,58 +485,426 @@ const DataCreate = () => {
     }
   };
 
+  const fetchWorkflows = async (deptId = null) => {
+    try {
+      setDataLoading(true);
+      const token = getLocalStorage('token')?.access?.token;
+      const organizationId = workflowForm.organizationId || getSelectedOrganizationId();
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      if (!organizationId) {
+        console.log('No organization selected, skipping workflow fetch');
+        setWorkflows([]);
+        return;
+      }
+      
+      // Use the department ID from URL parameter or passed parameter
+      const targetDepartmentId = deptId || selectedDepartmentId || departmentId;
+      
+      // Construct the appropriate URL based on whether we have a department ID
+      let url;
+      if (targetDepartmentId) {
+        url = `${WORKFLOW_API_URL}/dpt/${organizationId}/${targetDepartmentId}`;
+      } else {
+        url = `${WORKFLOW_API_URL}?organizationId=${organizationId}`;
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch workflows');
+      }
+      
+      const data = await response.json();
+      console.log('Workflow API Response:', data); // Debug log
+      
+      // Handle both single object and array responses, filter out null/undefined values
+      let workflowsArray = [];
+      if (data) {
+        if (Array.isArray(data)) {
+          workflowsArray = data.filter(item => item != null);
+        } else if (typeof data === 'object') {
+          workflowsArray = [data];
+        }
+      }
+      setWorkflows(workflowsArray);
+      
+      // Store the department ID if it was provided
+      if (targetDepartmentId) {
+        setSelectedDepartmentId(targetDepartmentId);
+      }
+    } catch (error) {
+      console.error('Error fetching workflows:', error);
+      setNotification({
+        open: true,
+        message: error.message,
+        severity: 'error'
+      });
+    } finally {
+      setDataLoading(false);
+    }
+  };
+
+  const createWorkflow = async (workflowData) => {
+    try {
+      setSubmitting(true);
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(workflowData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to create workflow');
+      }
+      
+      const data = await response.json();
+      setWorkflows([...workflows, data]);
+      setNotification({
+        open: true,
+        message: 'Workflow created successfully',
+        severity: 'success'
+      });
+      return data;
+    } catch (error) {
+      console.error('Error creating workflow:', error);
+      setNotification({
+        open: true,
+        message: error.message,
+        severity: 'error'
+      });
+      throw error;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const updateWorkflow = async (workflowId, workflowData) => {
+    try {
+      setSubmitting(true);
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(workflowData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update workflow');
+      }
+      
+      const data = await response.json();
+      setWorkflows(workflows?.map(wf => wf._id === workflowId ? data : wf));
+      setNotification({
+        open: true,
+        message: 'Workflow updated successfully',
+        severity: 'success'
+      });
+      return data;
+    } catch (error) {
+      console.error('Error updating workflow:', error);
+      setNotification({
+        open: true,
+        message: error.message,
+        severity: 'error'
+      });
+      throw error;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const deleteWorkflow = async (workflowId) => {
+    try {
+      setSubmitting(true);
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to delete workflow');
+      }
+      
+      setWorkflows(workflows?.filter(wf => wf._id !== workflowId));
+      setNotification({
+        open: true,
+        message: 'Workflow deleted successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error deleting workflow:', error);
+      setNotification({
+        open: true,
+        message: error.message,
+        severity: 'error'
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Escalation-related functions
+  const addEscalationLevel = async (workflowId, escalationData) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/escalation`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(escalationData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add escalation level');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding escalation level:', error);
+      throw error;
+    }
+  };
+
+  const updateEscalationLevel = async (workflowId, levelId, escalationData) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/escalation/${levelId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(escalationData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update escalation level');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating escalation level:', error);
+      throw error;
+    }
+  };
+
+  const deleteEscalationLevel = async (workflowId, levelId) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/escalation/${levelId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete escalation level');
+      }
+    } catch (error) {
+      console.error('Error deleting escalation level:', error);
+      throw error;
+    }
+  };
+
+  const getEscalationLevels = async (workflowId) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/escalation`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get escalation levels');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting escalation levels:', error);
+      throw error;
+    }
+  };
+
+  // Approver-related functions
+  const addWorkflowApprovers = async (workflowId, approvers) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/approvers`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ approvers }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to add approvers');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error adding approvers:', error);
+      throw error;
+    }
+  };
+
+  const updateApprover = async (workflowId, approverId, approverData) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/approvers/${approverId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(approverData),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update approver');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error updating approver:', error);
+      throw error;
+    }
+  };
+
+  const deleteApprover = async (workflowId, approverId) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/approvers/${approverId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete approver');
+      }
+    } catch (error) {
+      console.error('Error deleting approver:', error);
+      throw error;
+    }
+  };
+
+  const getApprovers = async (workflowId) => {
+    try {
+      const token = getLocalStorage('token')?.access?.token;
+      
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+      
+      const response = await fetch(`${WORKFLOW_API_URL}/${workflowId}/approvers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get approvers');
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error getting approvers:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (type === 'department') {
       fetchDepartments();
     } else if (type === 'workflow') {
-      // Simulate data loading for workflows
-      setDataLoading(true);
-      setTimeout(() => {
-        setWorkflows([
-          {
-            id: '68625ffb3657da25ac252094',
-            name: 'approver',
-            description: '21',
-            organizationId: 'Thirdeye-Ai',
-            departmentId: 'HR',
-            approvers: [
-              {
-                userId: 'Naman Agarwal',
-                email: 'naman.agarwal@jbmgroup.com',
-                isMandatory: true,
-                status: 'pending'
-              }
-            ],
-            escalationAlert: [],
-            isActive: true,
-            createdAt: '2025/06/30 15:29',
-            updatedAt: '2025/06/30 15:29'
-          }
-        ]);
-        setDataLoading(false);
-      }, 1000);
-    } else if (type === 'map') {
-      // Simulate data loading for mappings
-      setDataLoading(true);
-      setTimeout(() => {
-        setMappings([
-          {
-            id: 1,
-            department: 'HR',
-            workflow: 'HR Approval Workflow',
-            status: 'Active'
-          },
-          {
-            id: 2,
-            department: 'IT',
-            workflow: 'IT Approval Workflow',
-            status: 'Active'
-          }
-        ]);
-        setDataLoading(false);
-      }, 1000);
+      // Use department ID from URL parameter if available
+      fetchWorkflows(departmentId);
     }
-  }, [type]);
+  }, [type, departmentId]);
 
   const handleBack = () => {
     setLoading(true);
@@ -340,12 +913,20 @@ const DataCreate = () => {
     }, 300);
   };
 
+  // Function to handle department form submission
   const handleDepartmentSubmit = async () => {
     try {
+      setSubmitting(true);
+      
+      // Ensure we have a valid organization ID
+      const orgId = departmentForm.organizationId || getSelectedOrganizationId();
+      if (!orgId) {
+        throw new Error('Please select an organization first');
+      }
+
       const departmentData = {
-        name: departmentForm.name,
-        code: departmentForm.code,
-        organizationId: departmentForm.organizationId
+        ...departmentForm,
+        organizationId: orgId
       };
 
       if (editingDepartment) {
@@ -353,48 +934,84 @@ const DataCreate = () => {
       } else {
         await createDepartment(departmentData);
       }
-
-      setDepartmentForm({ name: '', code: '', organizationId: '' });
-      setEditingDepartment(null);
+      
       setDepartmentDialog(false);
+      setDepartmentForm({ name: '', code: '', organizationId: orgId });
+      setEditingDepartment(null);
+      fetchDepartments(orgId);
+      
+      setNotification({
+        open: true,
+        message: `Department ${editingDepartment ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
     } catch (error) {
-      console.error('Error submitting department:', error);
+      console.error('Error saving department:', error);
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to save department. Please try again.',
+        severity: 'error'
+      });
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const handleWorkflowSubmit = () => {
-    setSubmitting(true);
-    
-    // Simulate API call for workflow
-    setTimeout(() => {
-      const newWorkflow = {
-        id: editingWorkflow ? editingWorkflow.id : `wf_${Date.now()}`,
-        ...workflowForm,
-        createdAt: editingWorkflow ? editingWorkflow.createdAt : new Date().toLocaleString(),
-        updatedAt: new Date().toLocaleString()
-      };
+  const handleWorkflowSubmit = async () => {
+    try {
+      setSubmitting(true);
       
+      // Ensure we have a valid organization ID
+      const orgId = workflowForm.organizationId || getSelectedOrganizationId();
+      if (!orgId) {
+        throw new Error('Please select an organization first');
+      }
+
+      const workflowData = {
+        ...workflowForm,
+        organizationId: orgId
+      };
+
       if (editingWorkflow) {
-        setWorkflows(workflows.map(wf => 
-          wf.id === editingWorkflow.id ? newWorkflow : wf
-        ));
+        await updateWorkflow(editingWorkflow._id, workflowData);
       } else {
-        setWorkflows([...workflows, newWorkflow]);
+        await createWorkflow(workflowData);
       }
       
+      setWorkflowDialog(false);
       setWorkflowForm({
         name: '',
         description: '',
-        organizationId: '',
-        departmentId: '',
+        organizationId: orgId,
+        departmentId: departmentId || '',
         approvers: [],
-        escalationAlert: [],
+        escalationAlert: [{
+          level: 1,
+          emails: [],
+          timeout: 24, // hours
+          reminderInterval: 12, // hours
+          maxReminders: 3
+        }],
         isActive: true
       });
       setEditingWorkflow(null);
-      setWorkflowDialog(false);
+      fetchWorkflows(orgId);
+      
+      setNotification({
+        open: true,
+        message: `Workflow ${editingWorkflow ? 'updated' : 'created'} successfully`,
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error saving workflow:', error);
+      setNotification({
+        open: true,
+        message: error.message || 'Failed to save workflow. Please try again.',
+        severity: 'error'
+      });
+    } finally {
       setSubmitting(false);
-    }, 1000);
+    }
   };
 
   const handleEditDepartment = (department) => {
@@ -408,307 +1025,249 @@ const DataCreate = () => {
   };
 
   const handleEditWorkflow = (workflow) => {
+    if (!workflow) {
+      console.error('Cannot edit workflow: workflow data is null or undefined');
+      return;
+    }
+    
     setEditingWorkflow(workflow);
     setWorkflowForm({
-      name: workflow.name,
-      description: workflow.description,
-      organizationId: workflow.organizationId,
-      departmentId: workflow.departmentId,
-      approvers: workflow.approvers,
-      escalationAlert: workflow.escalationAlert,
-      isActive: workflow.isActive
+      name: workflow.name || '',
+      description: workflow.description || '',
+      organizationId: workflow.organizationId || '',
+      departmentId: workflow.departmentId || departmentId || '',
+      approvers: workflow.approvers || [],
+      escalationAlert: workflow.escalationAlert || [],
+      isActive: workflow.isActive !== undefined ? workflow.isActive : true
     });
     setWorkflowDialog(true);
   };
 
   const handleDeleteDepartment = (id) => {
-    if (window.confirm('Are you sure you want to delete this department?')) {
-      deleteDepartment(id);
+    if (window.confirm('Are you sure you want to delete this department? This action cannot be undone and may affect related workflows.')) {
+      deleteDepartment(id).catch(error => {
+        console.error('Error in handleDeleteDepartment:', error);
+        // Error notification is already handled in deleteDepartment function
+      });
     }
   };
 
   const handleDeleteWorkflow = (id) => {
-    setSubmitting(true);
-    setTimeout(() => {
-      setWorkflows(workflows.filter(wf => wf.id !== id));
-      setSubmitting(false);
-    }, 500);
+    if (!id) {
+      console.error('Cannot delete workflow: ID is null or undefined');
+      setNotification({
+        open: true,
+        message: 'Cannot delete workflow: Invalid ID',
+        severity: 'error'
+      });
+      return;
+    }
+    
+    if (window.confirm('Are you sure you want to delete this workflow? This action cannot be undone.')) {
+      deleteWorkflow(id).catch(error => {
+        console.error('Error in handleDeleteWorkflow:', error);
+      });
+    }
   };
 
   const handleCloseNotification = () => {
     setNotification({ ...notification, open: false });
   };
 
-  const renderDepartmentSection = () => (
-    <div>
-      <Box display="flex" alignItems="center" mb={2}>
-        <Typography variant="body2" color="textSecondary">
-          Dashboard / Department
-        </Typography>
-      </Box>
+  const renderDepartmentSection = () => {
+    // Define columns for department table
+    const departmentColumns = [
+      { field: 'name', headerName: 'Name ↑', type: 'text' },
+      { field: '_id', headerName: 'Id', type: 'text' },
+      { field: 'code', headerName: 'Code', type: 'text' },
+      { field: 'organizationId', headerName: 'Organization Id', type: 'organization' },
+      { field: 'updatedAt', headerName: 'Updated At', type: 'date' },
+      { field: 'createdAt', headerName: 'Created At', type: 'date' },
+      { field: 'workflow', headerName: 'Workflow', type: 'button', label: 'Workflow', action: 'workflow' },
+      { field: 'actions', headerName: 'Actions', type: 'actions' }
+    ];
 
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box display="flex" alignItems="center">
-          <Typography variant="h4" sx={{ mr: 2 }}>List</Typography>
-          <Box
-            sx={{
-              backgroundColor: '#1b5cb8',
-              color: 'white',
-              borderRadius: '50%',
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            {departments.length}
+    const handleDepartmentRowAction = (action, row) => {
+      if (action === 'workflow') {
+        router.push(`/datacreate?type=workflow&id=${row._id}`);
+      }
+    };
+
+    return (
+      <div>
+        <Box display="flex" alignItems="center" mb={2}>
+          <Typography variant="body2" color="textSecondary">
+            Dashboard / Department
+          </Typography>
+        </Box>
+
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" alignItems="center">
+            <Typography variant="h4" sx={{ mr: 2 }}>List</Typography>
+            <Box
+              sx={{
+                backgroundColor: '#1b5cb8',
+                color: 'white',
+                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              {departments.length}
+            </Box>
+          </Box>
+          <Box display="flex" gap={2}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setDepartmentDialog(true)}
+              className={Styles.addButton}
+              disabled={submitting}
+            >
+              Create new
+            </Button>
           </Box>
         </Box>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setDepartmentDialog(true)}
-            className={Styles.addButton}
-            disabled={submitting}
-          >
-            Create new
-          </Button>
-        </Box>
-      </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox">
-                <input type="checkbox" />
-              </TableCell>
-              <TableCell>Name ↑</TableCell>
-              <TableCell>Id</TableCell>
-              <TableCell>Code</TableCell>
-              <TableCell>Organization Id</TableCell>
-              <TableCell>Updated At</TableCell>
-              <TableCell>Created At</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {departments.map((dept) => (
-              <TableRow key={dept._id}>
-                <TableCell padding="checkbox">
-                  <input type="checkbox" />
-                </TableCell>
-                <TableCell>{dept.name}</TableCell>
-                <TableCell>{dept._id}</TableCell>
-                <TableCell>{dept.code}</TableCell>
-                <TableCell>
-                  <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                    {getOrganizationName(dept.organizationId)}
-                  </Typography>
-                </TableCell>
-                <TableCell>{new Date(dept.updatedAt).toLocaleString()}</TableCell>
-                <TableCell>{new Date(dept.createdAt).toLocaleString()}</TableCell>
-                <TableCell>
-                  <IconButton 
-                    onClick={() => handleEditDepartment(dept)}
-                    disabled={submitting}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton 
-                    onClick={() => handleDeleteDepartment(dept._id)}
-                    disabled={submitting}
-                  >
-                    {submitting ? <Loader size={20} /> : <DeleteIcon />}
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        <DataTable
+          columns={departmentColumns}
+          data={departments}
+          onEdit={handleEditDepartment}
+          onDelete={handleDeleteDepartment}
+          onRowAction={handleDepartmentRowAction}
+          submitting={submitting}
+          showCheckbox={true}
+          getOrganizationName={getOrganizationName}
+        />
 
-      <Dialog open={departmentDialog} onClose={() => setDepartmentDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {editingDepartment ? 'Edit Department' : 'Create new'}
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Name"
-                value={departmentForm.name}
-                onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Code"
-                value={departmentForm.code}
-                onChange={(e) => setDepartmentForm({ ...departmentForm, code: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Organization Id *</InputLabel>
-                <Select
-                  value={departmentForm.organizationId}
-                  onChange={(e) => setDepartmentForm({ ...departmentForm, organizationId: e.target.value })}
-                  label="Organization Id *"
+        <Dialog open={departmentDialog} onClose={() => setDepartmentDialog(false)} maxWidth="sm" fullWidth>
+          <DialogTitle>
+            {editingDepartment ? 'Edit Department' : 'Create new'}
+          </DialogTitle>
+          <DialogContent>
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Name"
+                  value={departmentForm.name}
+                  onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
                   required
-                >
-                  {mockOrganizations.map((org) => (
-                    <MenuItem key={org.id} value={org.id}>
-                      {org.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Code"
+                  value={departmentForm.code}
+                  onChange={(e) => setDepartmentForm({ ...departmentForm, code: e.target.value })}
+                  required
+                />
+              </Grid>
+
             </Grid>
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button 
-            onClick={() => {
-              setDepartmentDialog(false);
-              setDepartmentForm({ name: '', code: '', organizationId: '' });
-              setEditingDepartment(null);
-            }}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleDepartmentSubmit} 
-            variant="contained"
-            disabled={submitting || !departmentForm.name || !departmentForm.code || !departmentForm.organizationId}
-          >
-            {submitting ? (
-              <Box display="flex" alignItems="center">
-                <Loader size={20} />
-                <Box ml={1}>Saving...</Box>
-              </Box>
-            ) : (
-              editingDepartment ? 'Update' : 'Save'
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </div>
-  );
+          </DialogContent>
+          <DialogActions>
+            <Button 
+              onClick={() => {
+                setDepartmentDialog(false);
+                setDepartmentForm({ name: '', code: '', organizationId: '' });
+                setEditingDepartment(null);
+              }}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleDepartmentSubmit} 
+              variant="contained"
+              disabled={submitting || !departmentForm.name || !departmentForm.code}
+            >
+              {submitting ? (
+                <Box display="flex" alignItems="center">
+                  <Loader size={20} />
+                  <Box ml={1}>Saving...</Box>
+                </Box>
+              ) : (
+                editingDepartment ? 'Update' : 'Save'
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </div>
+    );
+  };
 
-  const renderWorkflowSection = () => (
-    <div>
-      <Box display="flex" alignItems="center" mb={2}>
-        <Typography variant="body2" color="textSecondary">
-          Dashboard / Workflow
-        </Typography>
-      </Box>
+  const renderWorkflowSection = () => {
+    // Define columns for workflow table
+    const workflowColumns = [
+      { field: 'name', headerName: 'Name ↑', type: 'text' },
+      { field: '_id', headerName: 'Id', type: 'text' },
+      { field: 'organizationId', headerName: 'Organization Id', type: 'organization' },
+      { field: 'departmentId', headerName: 'Department Name', type: 'department' },
+      { field: 'description', headerName: 'Description', type: 'text' },
+      { field: 'approvers', headerName: 'Approvers', type: 'count', suffix: 'Approvers' },
+      { field: 'escalationAlert', headerName: 'Escalation Alert', type: 'count', suffix: 'Alerts' },
+      { field: 'isActive', headerName: 'Is Active', type: 'chip' },
+      { field: 'actions', headerName: 'Actions', type: 'actions' }
+    ];
 
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Box display="flex" alignItems="center">
-          <Typography variant="h4" sx={{ mr: 2 }}>List</Typography>
-          <Box
-            sx={{
-              backgroundColor: '#1b5cb8',
-              color: 'white',
-              borderRadius: '50%',
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: 'bold'
-            }}
-          >
-            {workflows.length}
+    return (
+      <div>
+        <Box display="flex" alignItems="center" mb={2}>
+          <Typography variant="body2" color="textSecondary">
+            Dashboard / Workflow
+          </Typography>
+        </Box>
+
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Box display="flex" alignItems="center">
+            <Typography variant="h4" sx={{ mr: 2 }}>List</Typography>
+            <Box
+              sx={{
+                backgroundColor: '#1b5cb8',
+                color: 'white',
+                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}
+            >
+              {workflows?.length}
+            </Box>
+          </Box>
+          <Box display="flex" gap={2}>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setWorkflowDialog(true)}
+              className={Styles.addButton}
+              disabled={submitting}
+            >
+              Create new
+            </Button>
           </Box>
         </Box>
-        <Box display="flex" gap={2}>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => setWorkflowDialog(true)}
-            className={Styles.addButton}
-            disabled={submitting}
-          >
-            Create new
-          </Button>
-        </Box>
-      </Box>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell padding="checkbox">
-                <input type="checkbox" />
-              </TableCell>
-              <TableCell>Name ↑</TableCell>
-              <TableCell>Id</TableCell>
-              <TableCell>Organization Id</TableCell>
-              <TableCell>Department Id</TableCell>
-              <TableCell>Description</TableCell>
-              <TableCell>Approvers</TableCell>
-              <TableCell>Escalation Alert</TableCell>
-              <TableCell>Is Active</TableCell>
-              <TableCell>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {workflows.map((wf) => (
-              <TableRow key={wf.id}>
-                <TableCell padding="checkbox">
-                  <input type="checkbox" />
-                </TableCell>
-                <TableCell>{wf.name}</TableCell>
-                <TableCell>{wf.id}</TableCell>
-                <TableCell>
-                  <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                    {wf.organizationId}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                    {wf.departmentId}
-                  </Typography>
-                </TableCell>
-                <TableCell>{wf.description}</TableCell>
-                <TableCell>Length: {wf.approvers.length}</TableCell>
-                <TableCell>Length: {wf.escalationAlert.length}</TableCell>
-                <TableCell>
-                  <Button variant="contained" size="small" color="success">
-                    Yes
-                  </Button>
-                </TableCell>
-                <TableCell>
-                  <IconButton 
-                    onClick={() => handleEditWorkflow(wf)}
-                    disabled={submitting}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton 
-                    onClick={() => handleDeleteWorkflow(wf.id)}
-                    disabled={submitting}
-                  >
-                    {submitting ? <Loader size={20} /> : <DeleteIcon />}
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        <DataTable
+          columns={workflowColumns}
+          data={workflows?.filter(wf => wf != null) || []}
+          onEdit={handleEditWorkflow}
+          onDelete={handleDeleteWorkflow}
+          submitting={submitting}
+          showCheckbox={true}
+          getOrganizationName={getOrganizationName}
+          getDepartmentName={getDepartmentName}
+        />
 
       <Dialog open={workflowDialog} onClose={() => setWorkflowDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle>
@@ -727,22 +1286,7 @@ const DataCreate = () => {
                 onChange={(e) => setWorkflowForm({ ...workflowForm, name: e.target.value })}
               />
             </Grid>
-            <Grid item xs={12}>
-              <FormControl fullWidth>
-                <InputLabel>Organization Id</InputLabel>
-                <Select
-                  value={workflowForm.organizationId}
-                  onChange={(e) => setWorkflowForm({ ...workflowForm, organizationId: e.target.value })}
-                  label="Organization Id"
-                >
-                  {mockOrganizations.map((org) => (
-                    <MenuItem key={org.id} value={org.id}>
-                      {org.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
+
             <Grid item xs={12}>
               <FormControl fullWidth>
                 <InputLabel>Department Id</InputLabel>
@@ -751,8 +1295,8 @@ const DataCreate = () => {
                   onChange={(e) => setWorkflowForm({ ...workflowForm, departmentId: e.target.value })}
                   label="Department Id"
                 >
-                  {mockDepartmentOptions.map((dept) => (
-                    <MenuItem key={dept.id} value={dept.id}>
+                  {departments.map((dept) => (
+                    <MenuItem key={dept._id} value={dept._id}>
                       {dept.name}
                     </MenuItem>
                   ))}
@@ -789,35 +1333,58 @@ const DataCreate = () => {
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
                       <FormControl fullWidth>
-                        <InputLabel>Approvers User Id</InputLabel>
+                        <InputLabel>Select Approver</InputLabel>
                         <Select
-                          value={approver.userId}
+                          value={approver.userId || ''}
                           onChange={(e) => {
                             const newApprovers = [...workflowForm.approvers];
-                            newApprovers[index].userId = e.target.value;
-                            newApprovers[index].email = mockUsers.find(u => u.id === e.target.value)?.email || '';
+                            const selectedUser = users.find(user => user._id === e.target.value);
+                            newApprovers[index] = {
+                              ...newApprovers[index],
+                              userId: e.target.value,
+                              email: selectedUser?.email || '',
+                              name: selectedUser?.name || ''
+                            };
                             setWorkflowForm({ ...workflowForm, approvers: newApprovers });
                           }}
-                          label="Approvers User Id"
+                          label="Select Approver"
+                          renderValue={(selected) => {
+                            const selectedUser = users.find(user => user._id === selected);
+                            return selectedUser?.name || selectedUser?.email || '';
+                          }}
                         >
-                          {mockUsers.map((user) => (
-                            <MenuItem key={user.id} value={user.id}>
-                              {user.name}
-                            </MenuItem>
-                          ))}
+                          <MenuItem value="">
+                            <em>Select a user</em>
+                          </MenuItem>
+                          {loadingUsers ? (
+                            <MenuItem disabled>Loading users...</MenuItem>
+                          ) : users.length > 0 ? (
+                            users.map((user) => (
+                              <MenuItem key={user._id} value={user._id}>
+                                <Box>
+                                  <div>{user.name || user.email}</div>
+                                  {user.email && <div style={{ fontSize: '0.75rem', color: 'rgba(0, 0, 0, 0.6)' }}>{user.email}</div>}
+                                </Box>
+                              </MenuItem>
+                            ))
+                          ) : (
+                            <MenuItem disabled>No users found in this organization</MenuItem>
+                          )}
                         </Select>
                       </FormControl>
                     </Grid>
                     <Grid item xs={12}>
                       <TextField
                         fullWidth
-                        label="Approvers Email"
-                        value={approver.email}
+                        label="Approver's Email"
+                        value={approver.email || ''}
                         onChange={(e) => {
                           const newApprovers = [...workflowForm.approvers];
                           newApprovers[index].email = e.target.value;
                           setWorkflowForm({ ...workflowForm, approvers: newApprovers });
                         }}
+                        disabled={!!approver.userId} // Disable if user is selected from dropdown
+                        helperText={approver.userId ? 'Email is linked to the selected user' : 'Enter email for external approver'}
                       />
                     </Grid>
                     <Grid item xs={6}>
@@ -836,16 +1403,22 @@ const DataCreate = () => {
                       />
                     </Grid>
                     <Grid item xs={6}>
-                      <TextField
-                        fullWidth
-                        label="Approvers Status"
-                        value={approver.status}
-                        onChange={(e) => {
-                          const newApprovers = [...workflowForm.approvers];
-                          newApprovers[index].status = e.target.value;
-                          setWorkflowForm({ ...workflowForm, approvers: newApprovers });
-                        }}
-                      />
+                      <FormControl fullWidth>
+                        <InputLabel>Approvers Status</InputLabel>
+                        <Select
+                          value={approver.status}
+                          onChange={(e) => {
+                            const newApprovers = [...workflowForm.approvers];
+                            newApprovers[index].status = e.target.value;
+                            setWorkflowForm({ ...workflowForm, approvers: newApprovers });
+                          }}
+                          label="Approvers Status"
+                        >
+                          <MenuItem value="pending">Pending</MenuItem>
+                          <MenuItem value="approved">Approved</MenuItem>
+                          <MenuItem value="rejected">Rejected</MenuItem>
+                        </Select>
+                      </FormControl>
                     </Grid>
                   </Grid>
                 </Card>
@@ -873,18 +1446,117 @@ const DataCreate = () => {
 
             <Grid item xs={12}>
               <Typography variant="h6" gutterBottom>Escalation Alert</Typography>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setWorkflowForm({
-                    ...workflowForm,
-                    escalationAlert: [...workflowForm.escalationAlert, {}]
-                  });
-                }}
-              >
-                + Add New Item
-              </Button>
+              {workflowForm.escalationAlert.map((alert, index) => (
+                <Card key={index} variant="outlined" sx={{ p: 2, mb: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                    <Typography variant="subtitle1">
+                      <strong>Escalation Alert [{alert.level}]</strong>
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => {
+                        const newAlerts = workflowForm.escalationAlert.filter((_, i) => i !== index);
+                        setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                      }}
+                      disabled={workflowForm.escalationAlert.length <= 1}
+                    >
+                      Remove Alert Level
+                    </Button>
+                  </Box>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Emails</Typography>
+                      <TextField
+                        fullWidth
+                        value={alert.emails?.join(', ') || ''}
+                        onChange={(e) => {
+                          const newAlerts = [...workflowForm.escalationAlert];
+                          newAlerts[index].emails = e.target.value.split(',').map(email => email.trim()).filter(Boolean);
+                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                        }}
+                        placeholder="email1@example.com, email2@example.com"
+                        helperText="Enter comma-separated email addresses"
+                        variant="outlined"
+                        size="small"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Timeout (hours)</Typography>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={alert.timeout || 24}
+                        onChange={(e) => {
+                          const newAlerts = [...workflowForm.escalationAlert];
+                          newAlerts[index].timeout = parseInt(e.target.value) || 0;
+                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                        }}
+                        inputProps={{ min: 1 }}
+                        variant="outlined"
+                        size="small"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Reminder Interval (hours)</Typography>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={alert.reminderInterval || 12}
+                        onChange={(e) => {
+                          const newAlerts = [...workflowForm.escalationAlert];
+                          newAlerts[index].reminderInterval = parseInt(e.target.value) || 0;
+                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                        }}
+                        inputProps={{ min: 1 }}
+                        variant="outlined"
+                        size="small"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={4}>
+                      <Typography variant="subtitle2" gutterBottom>Escalation Alert Max Reminders</Typography>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={alert.maxReminders || 3}
+                        onChange={(e) => {
+                          const newAlerts = [...workflowForm.escalationAlert];
+                          newAlerts[index].maxReminders = parseInt(e.target.value) || 0;
+                          setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                        }}
+                        inputProps={{ min: 1 }}
+                        variant="outlined"
+                        size="small"
+                      />
+                    </Grid>
+                  </Grid>
+                </Card>
+              ))}
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    const newAlerts = [...workflowForm.escalationAlert];
+                    newAlerts.push({
+                      level: newAlerts.length + 1,
+                      emails: [],
+                      timeout: 24,
+                      reminderInterval: 12,
+                      maxReminders: 3
+                    });
+                    setWorkflowForm({ ...workflowForm, escalationAlert: newAlerts });
+                  }}
+                  sx={{ mt: 2 }}
+                >
+                  Add New Escalation Level
+                </Button>
+              </Grid>
             </Grid>
 
             <Grid item xs={12}>
@@ -956,137 +1628,64 @@ const DataCreate = () => {
       </Dialog>
     </div>
   );
+};
 
-  const renderMapSection = () => (
-    <div>
-      <Box display="flex" alignItems="center" mb={2}>
-        <Typography variant="body2" color="textSecondary">
-          Dashboard / Department-Workflow Mapping
-        </Typography>
-      </Box>
+  const renderMapSection = () => {
+    // Define columns for departments table in mapping section
+    const mapDepartmentColumns = [
+      { field: 'name', headerName: 'Name', type: 'text' },
+      { field: 'code', headerName: 'Code', type: 'text' },
+      { field: 'organizationId', headerName: 'Organization Id', type: 'organization' }
+    ];
 
-      <Typography variant="h4" mb={3}>Map Department</Typography>
-      
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Departments</Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Code</TableCell>
-                      <TableCell>Organization Id</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {departments.map((dept) => (
-                      <TableRow key={dept._id}>
-                        <TableCell>{dept.name}</TableCell>
-                        <TableCell>{dept.code}</TableCell>
-                        <TableCell>
-                          <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                            {dept.organizationId}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
+    // Define columns for workflows table in mapping section
+    const mapWorkflowColumns = [
+      { field: 'name', headerName: 'Name', type: 'text' },
+      { field: 'departmentId', headerName: 'Department Name', type: 'department' },
+      { field: 'description', headerName: 'Description', type: 'text' }
+    ];
 
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Workflows</Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Department Id</TableCell>
-                      <TableCell>Description</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {workflows.map((wf) => (
-                      <TableRow key={wf.id}>
-                        <TableCell>{wf.name}</TableCell>
-                        <TableCell>
-                          <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                            {wf.departmentId}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{wf.description}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
+    // Define columns for mappings table
+    const mappingColumns = [
+      { field: 'department', headerName: 'Department', type: 'text' },
+      { field: 'workflow', headerName: 'Workflow', type: 'text' },
+      { field: 'organizationId', headerName: 'Organization Id', type: 'organization' },
+      { field: 'approvers', headerName: 'Approvers', type: 'count', suffix: 'Approvers' },
+      { field: 'status', headerName: 'Status', type: 'chip' },
+      { field: 'actions', headerName: 'Actions', type: 'actions' }
+    ];
 
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>Department-Workflow Mappings</Typography>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Department</TableCell>
-                      <TableCell>Workflow</TableCell>
-                      <TableCell>Organization Id</TableCell>
-                      <TableCell>Approvers</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {mappings.map((mapping) => (
-                      <TableRow key={mapping.id}>
-                        <TableCell>{mapping.department}</TableCell>
-                        <TableCell>{mapping.workflow}</TableCell>
-                        <TableCell>
-                          <Typography color="primary" sx={{ cursor: 'pointer' }}>
-                            Thirdeye-Ai
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {workflows.find(wf => wf.name === mapping.workflow)?.approvers.length || 0} Approvers
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={mapping.status} 
-                            color={mapping.status === 'Active' ? 'success' : 'default'}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <IconButton>
-                            <EditIcon />
-                          </IconButton>
-                          <IconButton>
-                            <DeleteIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-    </div>
-  );
+    // Transform mappings data to include approvers count
+    const transformedMappings = mappings.map(mapping => ({
+      ...mapping,
+      approvers: workflows?.find(wf => wf.name === mapping.workflow)?.approvers || [],
+      organizationId: 'Thirdeye-Ai' // This seems to be hardcoded in the original
+    }));
+
+    return (
+      <div>
+        <Box display="flex" alignItems="center" mb={2}>
+          <Typography variant="body2" color="textSecondary">
+            Dashboard / Department-Workflow Mapping
+          </Typography>
+        </Box>
+
+        <Typography variant="h4" mb={3}>Map Department</Typography>
+        
+        <MappingTables
+          departments={departments}
+          workflows={workflows}
+          mappings={mappings}
+          departmentColumns={mapDepartmentColumns}
+          workflowColumns={mapWorkflowColumns}
+          mappingColumns={mappingColumns}
+          transformedMappings={transformedMappings}
+          getOrganizationName={getOrganizationName}
+          getDepartmentName={getDepartmentName}
+        />
+      </div>
+    );
+  };
 
   const getTitle = () => {
     switch (type) {
