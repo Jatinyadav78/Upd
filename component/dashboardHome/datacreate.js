@@ -1141,26 +1141,73 @@ const DataCreate = () => {
             {editingDepartment ? 'Edit Department' : 'Create new'}
           </DialogTitle>
           <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid container spacing={3} sx={{ mt: 1 }}>
               <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>General Details</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                  * Department Name
+                </Typography>
                 <TextField
                   fullWidth
-                  label="Name"
                   value={departmentForm.name}
+                  placeholder="Enter department name"
                   onChange={(e) => setDepartmentForm({ ...departmentForm, name: e.target.value })}
                   required
+                  variant="outlined"
+                  size="small"
+                  sx={{ backgroundColor: '#fff' }}
                 />
               </Grid>
               <Grid item xs={12}>
+                <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                  * Department Code
+                </Typography>
                 <TextField
                   fullWidth
-                  label="Code"
                   value={departmentForm.code}
+                  placeholder="Enter department code"
                   onChange={(e) => setDepartmentForm({ ...departmentForm, code: e.target.value })}
                   required
+                  variant="outlined"
+                  size="small"
+                  sx={{ backgroundColor: '#fff' }}
                 />
               </Grid>
-
+              <Grid item xs={12}>
+                <Typography variant="h6" gutterBottom>Organization Details</Typography>
+              </Grid>
+              <Grid item xs={12}>
+                <Box 
+                  sx={{ 
+                    border: '1px solid #e0e0e0', 
+                    borderRadius: '4px', 
+                    p: 2, 
+                    backgroundColor: '#f8f9fa',
+                    borderLeft: '3px solid #42a5f5'
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, color: '#1976d2' }}>
+                    Organization ID
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    value={departmentForm.organizationId || 'Auto-assigned from selected organization'}
+                    disabled
+                    variant="outlined"
+                    size="small"
+                    sx={{ 
+                      backgroundColor: '#fff',
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: '#e0e0e0',
+                        },
+                      },
+                    }}
+                  />
+                </Box>
+              </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
@@ -1171,6 +1218,14 @@ const DataCreate = () => {
                 setEditingDepartment(null);
               }}
               disabled={submitting}
+              sx={{ 
+                borderColor: '#1976d2',
+                color: '#1976d2',
+                '&:hover': {
+                  borderColor: '#1565c0',
+                  backgroundColor: '#e3f2fd'
+                }
+              }}
             >
               Cancel
             </Button>
@@ -1178,6 +1233,12 @@ const DataCreate = () => {
               onClick={handleDepartmentSubmit} 
               variant="contained"
               disabled={submitting || !departmentForm.name || !departmentForm.code}
+              sx={{
+                backgroundColor: '#1976d2',
+                '&:hover': {
+                  backgroundColor: '#1565c0'
+                }
+              }}
             >
               {submitting ? (
                 <Box display="flex" alignItems="center">
